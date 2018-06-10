@@ -51,6 +51,8 @@ void format_disk(long long int disk_size, DBR virtual_dbr) {
 	int temp = 0;
 	Root_Catalog Label = {{0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20},
 						  {0x20, 0x20, 0x20}};
+
+	int i = 0;
 	//format DBR
 
 	temp = disk_size_sector - 1 - 32 * virtual_dbr.Root_Entries / virtual_dbr.Bytes_Per_Sector;
@@ -69,10 +71,9 @@ void format_disk(long long int disk_size, DBR virtual_dbr) {
 	fwrite(end_DBR, 1, 2, disk);
 
 	//format FAT
-
+	
 	fseek(disk, virtual_dbr.Bytes_Per_Sector * virtual_dbr.Reserved_Sector, SEEK_SET);
 	fwrite(start_FAT, 1, 4, disk);
-
 	fseek(disk, virtual_dbr.Sectors_Per_FAT * virtual_dbr.Bytes_Per_Sector - 4, SEEK_CUR);
 	fwrite(start_FAT, 1, 4, disk);
 
