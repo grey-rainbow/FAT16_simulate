@@ -1,43 +1,60 @@
-#ifndef _CATALOG_
-#define _CATALOG_
+#include "../include/catalog.h"
 
-#include <stdio.h>
-
-typedef struct Root_Catalog {
-	unsigned char File_Name[8];
-	unsigned char Extend_Name[3];
-	unsigned char Property;
-	unsigned char System_Reserve[10];
-	unsigned short File_Mtime_name;
-	unsigned short File_Last_Modified;
-	unsigned short File_First_Cluster;
-	unsigned int File_Size;
-}Root_Catalog;
-
-void add_catalog(FILE*, Root_Catalog );
-void read_catalog(FILE*, Root_Catalog*);
-
-void add_catalog(FILE *file, Root_Catalog catalog) {
-
-	fwrite(&catalog.File_Name, 1, 8, file);
-	fwrite(&catalog.Extend_Name, 1, 3, file);
-	fwrite(&catalog.Property, 1, 1, file);
-	fwrite(&catalog.System_Reserve, 1, 10, file);
-	fwrite(&catalog.File_Mtime_name, 1, 2, file);
-	fwrite(&catalog.File_Last_Modified, 1, 2, file);
-	fwrite(&catalog.File_First_Cluster, 1, 2, file);
-	fwrite(&catalog.File_Size, 1, 4, file);	
+catalog::catalog(uint8_t file_name[], uint8_t extend_name[], const uint8_t property, uint8_t system_reserve[],
+                 const uint16_t file_mtime_name, const uint16_t file_last_modified, const uint16_t file_first_cluster,
+                 const unsigned file_size): property_(property),
+                                            file_mtime_name(file_mtime_name),
+                                            file_last_modified(file_last_modified),
+                                            file_first_cluster(file_first_cluster),
+                                            file_size(file_size)
+{
+	memcpy(this->file_name, file_name, 8);
+	memcpy(this->extend_name, extend_name, 3);
+	memcpy(this->system_reserve, system_reserve, 10);
 }
 
-void read_catalog(FILE* file, Root_Catalog* catalog) {
-	fread(&catalog -> File_Name, 1, 8, file);
-	fread(&catalog -> Extend_Name, 1, 3, file);
-	fread(&catalog -> Property, 1, 1, file);
-	fread(&catalog -> System_Reserve, 1, 10, file);
-	fread(&catalog -> File_Mtime_name, 1, 2, file);
-	fread(&catalog -> File_Last_Modified, 1, 2, file);
-	fread(&catalog -> File_First_Cluster, 1, 2, file);
-	fread(&catalog -> File_Size, 1, 4, file);
+catalog::catalog(uint8_t file_name[], uint8_t extend_name[])
+{
+	memcpy(file_name, file_name, 8);
+	memcpy(extend_name, extend_name, 3);
+	memset(system_reserve, 0, 10);
+
 }
 
-#endif
+void catalog::add_catalog(std::fstream& fs, catalog& root_catalog)
+{
+	char temp[9] = {'\0'};
+	while (! fs.is_open())
+	{
+		fs.clear();
+		memcpy(temp, root_catalog.file_name, 8);
+		fs.open(temp, std::ios::in | std::ios::out | std::ios::binary);
+	}
+
+	fs.write(reinterpret_cast<const char*>(root_catalog.file_name), 8);
+	fs.write(reinterpret_cast<const char*>(root_catalog.extend_name), 3);
+	fs.write(reinterpret_cast<const char*>(&root_catalog.property_), 1);
+	fs.write(reinterpret_cast<const char*>(root_catalog.system_reserve), 10);
+	fs.write(reinterpret_cast<const char*>(&root_catalog.file_mtime_name), 2);
+	fs.write(reinterpret_cast<const char*>(&root_catalog.file_last_modified), 2);
+	fs.write(reinterpret_cast<const char*>(&root_catalog.file_first_cluster), 2);
+	fs.write(reinterpret_cast<const char*>(&root_catalog.file_size), 4);
+}
+
+void catalog::read_catalog(std::fstream& fs, catalog& root_catalog)
+{
+	while (!fs.is_open())
+	{
+		fs.clear();
+		throw std::logic_error("cannot open system file");
+	}
+
+	fs.read(reinterpret_cast<char*>(root_catalog.file_name), 8);
+	fs.read(reinterpret_cast<char*>(root_catalog.extend_name), 3);
+	fs.read(reinterpret_cast<char*>(&root_catalog.property_), 1);
+	fs.read(reinterpret_cast<char*>(root_catalog.system_reserve), 10);
+	fs.read(reinterpret_cast<char*>(&root_catalog.file_mtime_name), 2);
+	fs.read(reinterpret_cast<char*>(&root_catalog.file_last_modified), 2);
+	fs.read(reinterpret_cast<char*>(&root_catalog.file_first_cluster), 2);
+	fs.read(reinterpret_cast<char*>(&root_catalog.file_size), 4);
+}

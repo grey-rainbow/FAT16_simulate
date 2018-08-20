@@ -69,7 +69,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>I:\materials%28Computer Systems%29\homework\homework_13\FAT16_simulate\include;$(IncludePath)</IncludePath>
+    <SourcePath>I:\materials%28Computer Systems%29\homework\homework_13\FAT16_simulate\source;$(SourcePath)</SourcePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -115,6 +118,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="source\catalog.cpp" />
+    <ClCompile Include="source\config.cpp" />
+    <ClCompile Include="source\disk.cpp" />
+    <ClCompile Include="source\file.cpp" />
+    <ClCompile Include="source\file_system.cpp" />
+    <ClCompile Include="source\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resource\virtual.vhd" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\catalog.h" />
+    <ClInclude Include="include\config.h" />
+    <ClInclude Include="include\disk.h" />
+    <ClInclude Include="include\file_system.h" />
+    <ClInclude Include="include\file_time.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

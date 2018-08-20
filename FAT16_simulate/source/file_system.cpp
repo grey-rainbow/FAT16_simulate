@@ -1,129 +1,109 @@
-#ifndef _FILE_SYSTEM_
-#define _FILE_SYSTEM_
-
-#include "catalog.cpp"
 #include "disk.cpp"
-#include "file_time.c"
+#include "../include/file_time.h"
+#include "../include/file_system.h"
 
-typedef struct Node* pNode;
-
-typedef struct Node {
-	unsigned short element;
-	pNode next;
-}Node;
-
-void modify_FAT(FILE* disk, pNode root) {
-
-	unsigned short last = root -> element - 1;
-	pNode list;
-	unsigned short temp = 0;
-	
-	for (list = root; list -> next; list = list -> next) {
-
-		fseek(disk, (list -> element - last - 1) * 2, SEEK_CUR);		
-		fwrite(&(list -> next -> element), 2, 1, disk);
-		last = list -> element;
-	}
-
-	temp = 0xFF;
-	fseek(disk, (list -> element - last - 1) * 2, SEEK_CUR);		
-	fwrite(&temp, 2, 1, disk);
-	
-}
-
-void add_file(FILE*, DBR, Root_Catalog, char*);
-void add_fold(FILE*, DBR, Root_Catalog, char*);
-
-
-void add_file(FILE* disk, DBR virtual_dbr, Root_Catalog catalog, char* buffer) {
+void file_system::add_file(catalog &file_catalog, char* buffer) const
+{
+	std::fstream fs(reinterpret_cast<const char*>(get_disk_label()), std::ios::in | std::ios::out | std::ios::binary);
 
 	//modify FAT
-	unsigned short temp = 0;
-	unsigned int size = catalog.File_Size;
-	pNode list, root;
-	unsigned short count = 2, last = 2;
-	Root_Catalog current_catalog =  {{0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20},
-									 {0x20, 0x20, 0x20}};;
+	uint16_t temp = 0;
+	unsigned int size = file_catalog.file_size;
+	uint16_t count = 2;
+	catalog current_catalog ;
 	int file_count = 0;
+	std::list<uint16_t> file_list;
 
-	fseek(disk, virtual_dbr.Reserved_Sector * virtual_dbr.Bytes_Per_Sector + 4, SEEK_SET);
-	list = (pNode) malloc (sizeof(Node));
-	list -> next = NULL;
-	root = list;
-	
-	while (1) {
-		
-		fread(&temp, 2, 1, disk);				
-		if (temp == 0) {
-			
-			list -> element = count;
-			
-			if (size <= virtual_dbr.Bytes_Per_Sector) {			
-				break;
-			}
-			else {
-				size -= virtual_dbr.Bytes_Per_Sector;				
-			}
-			list -> next = (pNode) malloc (sizeof(Node));
-			list = list -> next;
-			list -> next = NULL;
+	fs.seekg(disk_dbr_.reserved_sector * disk_dbr_.bytes_per_sector + 4, std::fstream::beg);
+
+	while (true)
+	{
+		fs.read(reinterpret_cast<char*>(temp), 2);
+		if (! temp)
+		{
+			file_list.push_back(count);
+
+			if (size <= disk_dbr_.bytes_per_sector) break;
+			size -= disk_dbr_.bytes_per_sector;
 		}
+
 		count++;
 	}
 
-	fseek(disk, virtual_dbr.Reserved_Sector * virtual_dbr.Bytes_Per_Sector + 4, SEEK_SET);
+	fs.seekp(disk_dbr_.reserved_sector * disk_dbr_.bytes_per_sector + 4, std::fstream::beg);
 
-	modify_FAT(disk, root);
-	
+	modify_FAT(fs, file_list);
+
 	//FAT backup
+	fs.seekp((disk_dbr_.reserved_sector + disk_dbr_.sectors_per_FAT) * disk_dbr_.bytes_per_sector + 4,
+			 std::fstream::beg);
 
-	fseek(disk, (virtual_dbr.Reserved_Sector + virtual_dbr.Sectors_Per_FAT) * virtual_dbr.Bytes_Per_Sector + 4, SEEK_SET);
-
-	modify_FAT(disk, root);
-
-	catalog.File_First_Cluster = root -> element;
+	modify_FAT(fs, file_list);
 
 	//add root catalog
+	file_catalog.file_first_cluster = file_list.front();
 
-	fseek(disk, virtual_dbr.Bytes_Per_Sector * (virtual_dbr.Reserved_Sector + virtual_dbr.Sectors_Per_FAT * 2), SEEK_SET);
-	
-	while (file_count < virtual_dbr.Root_Entries) {
-		
-		//fread(&current_catalog.File_Name[0], 1, 1, disk);
-		//fseek(disk, 31, SEEK_CUR);
-		read_catalog(disk, &current_catalog);
-		if (current_catalog.File_Name[0] == '\0') {
-			//fseek(disk, -32, SEEK_CUR);			
-			add_catalog(disk, catalog);
+	fs.seekg(disk_dbr_.bytes_per_sector * (disk_dbr_.reserved_sector + disk_dbr_.sectors_per_FAT * 2),
+	         std::fstream::beg);
+	fs.seekp(disk_dbr_.bytes_per_sector * (disk_dbr_.reserved_sector + disk_dbr_.sectors_per_FAT * 2),
+			 std::fstream::beg);
+
+	while (file_count < disk_dbr_.root_entries)
+	{
+		catalog::read_catalog(fs, current_catalog);
+		if (current_catalog.file_name[0] == '\0')
+		{
+			catalog::add_catalog(fs, file_catalog);
 			break;
 		}
-		//fseek(disk, -32, SEEK_CUR);
-		memset(current_catalog.File_Name, 0, 8);
+		memset(current_catalog.file_name, 0, 8);
 		file_count++;
 	}
 
 	//save data
+	fs.seekp(disk_dbr_.bytes_per_sector * (disk_dbr_.reserved_sector + disk_dbr_.sectors_per_FAT * 2) +
+	      disk_dbr_.root_entries * 32, std::fstream::beg);
 
-	fseek(disk, virtual_dbr.Bytes_Per_Sector * (virtual_dbr.Reserved_Sector + virtual_dbr.Sectors_Per_FAT * 2) + virtual_dbr.Root_Entries * 32, SEEK_SET);
+	uint16_t last = file_list.front() - 2;
 
-	last = root -> element - 2;
-	
-	for (list = root; list; list = list -> next) {
-
-		fseek(disk, (list -> element - last - 1) * virtual_dbr.Sectors_Per_Custer * virtual_dbr.Bytes_Per_Sector, SEEK_CUR);
-		if (list -> next == NULL)
-			fwrite(buffer, 1, (catalog.File_Size - 1) % virtual_dbr.Bytes_Per_Sector * virtual_dbr.Sectors_Per_Custer + 1, disk);
+	for (auto iter = file_list.begin(); iter != file_list.end();)
+	{
+		fs.seekp((*iter - last - 1) * disk_dbr_.sectors_per_custer * disk_dbr_.bytes_per_sector,
+		      std::fstream::cur);
+		last = *iter;
+		if (++iter == file_list.end())
+			fs.write(buffer,
+			       (file_catalog.file_size - 1) % disk_dbr_.bytes_per_sector * disk_dbr_.sectors_per_custer + 1);
 		else
-			fwrite(buffer, 1, virtual_dbr.Bytes_Per_Sector * virtual_dbr.Sectors_Per_Custer, disk);
-		last = list -> element;
+			fs.write(buffer, disk_dbr_.bytes_per_sector * disk_dbr_.sectors_per_custer);
 	}
 
 	//free
-	
-	for (list = root; list; list = root) {
-		root = list -> next;
-		free(list);
-	}
+	file_list.clear();
+} 
+
+file_system::file_system(disk disk_dbr):
+	disk_dbr_(disk_dbr)
+{
 }
 
-#endif
+void file_system::add_fold(catalog&, char*)
+{
+}
+
+void file_system::modify_FAT(std::fstream &fs, std::list<uint16_t> &file_list)
+{
+	uint16_t last = file_list.front() - 1;
+	auto iter = file_list.begin();
+	for (; iter != file_list.end(); ++iter)
+	{
+		fs.seekp((*iter - last - 1) * 2, std::fstream::cur);
+		fs.write(reinterpret_cast<const char*>(*(++iter)), 2);
+		--iter;
+		last = *iter;
+	}
+
+	const uint16_t temp = 0xFF;
+	fs.seekp((*iter - last - 1) * 2, std::fstream::cur);
+	fs.write(reinterpret_cast<const char*>(temp), 2);
+}
